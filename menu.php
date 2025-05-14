@@ -1,146 +1,96 @@
 <?php
-include 'config.php';
-include 'sms.php';
+include_once 'sms.php';
 
-class BlogUSSD {
+class Menu {
+    private $text;
+    private $sessionId;
+    private $phoneNumber;
+    private $conn;
     private $sms;
 
-    public function __construct() {
-        $this->sms = new Sms(); // Initialize SMS class
+    public function __construct($text, $sessionId, $phoneNumber, $conn) {
+        $this->text = $text;
+        $this->sessionId = $sessionId;
+        $this->phoneNumber = $phoneNumber;
+        $this->conn = $conn;
+        $this->sms = new Sms();
     }
 
-    // Main Menu
+    public function middleWare($text) {
+        return trim($text);
+    }
+
     public function mainMenu() {
-        return "CON Welcome to Blog USSD\n1. Subscribe\n2. Unsubscribe\n3. Rate Blog\n4. Suggest Topic\n5. Feedback\n6. Exit";
+        echo "CON Welcome to Menu Service\n";
+        echo "1. Subscribe\n";
+        echo "2. Unsubscribe\n";
+        echo "3. Rate Blog\n";
+        echo "4. Suggest Topic\n";
+        echo "5. Feedback";
     }
 
-    // Handle User Input Based on the Menu Selection
-    public function handleUserInput($text, $phoneNumber) {
-        global $conn;
-        $input = explode("*", $text);
-        $level = count($input);
+    public function menuSubscribe($input) {
+        if (count($input) == 1) {
+            $stmt = $this->conn->prepare("INSERT IGNORE INTO subscribers (phone_number) VALUES (?)");
+            $stmt->execute([$this->phoneNumber]);
 
-        switch ($input[0]) {
-            case "1": // Subscribe
-                return $this->handleSubscription($level, $input, $phoneNumber);
-
-            case "2": // Unsubscribe
-                return $this->handleUnsubscription($level, $input, $phoneNumber);
-
-            case "3": // Rate Blog
-                return $this->handleRating($level, $input, $phoneNumber);
-
-            case "4": // Suggest Topic
-                return $this->handleTopicSuggestion($level, $input, $phoneNumber);
-
-            case "5": // Feedback
-                return $this->handleFeedback($level, $input, $phoneNumber);
-
-            default:
-                return $this->mainMenu();
-        }
-    }
-
-    // Handle Subscription
-    private function handleSubscription($level, $input, $phoneNumber) {
-        global $conn;
-
-        if ($level == 1) {
-            return "CON Confirm subscription?\n1. Yes\n2. No";
-        } elseif ($level == 2 && $input[1] == "1") {
-            $stmt = $conn->prepare("INSERT IGNORE INTO subscribers (phone_number) VALUES (?)");
-            $stmt->execute([$phoneNumber]);
-
-            // Send SMS to confirm subscription
-            $message = "Thank you for subscribing to Blog USSD updates.";
-            $this->sms->sendSMS($message, $phoneNumber);
-
-            return "END You are now subscribed!";
+            $this->sms->sendSMS("You are now subscribed to updates.", $this->phoneNumber);
+            echo "END You are now subscribed.";
         } else {
-            return "END Subscription cancelled.";
+            echo "END Invalid input.";
         }
     }
 
-    // Handle Unsubscription
-    private function handleUnsubscription($level, $input, $phoneNumber) {
-        global $conn;
+    public function menuUnsubscribe($input) {
+        if (count($input) == 1) {
+            $stmt = $this->conn->prepare("UPDATE subscribers SET status = 'inactive' WHERE phone_number = ?");
+            $stmt->execute([$this->phoneNumber]);
 
-        if ($level == 1) {
-            return "CON Confirm unsubscribe?\n1. Yes\n2. No";
-        } elseif ($level == 2 && $input[1] == "1") {
-            $stmt = $conn->prepare("UPDATE subscribers SET status = 'inactive' WHERE phone_number = ?");
-            $stmt->execute([$phoneNumber]);
-
-            // Send SMS to confirm unsubscription
-            $message = "You have been unsubscribed from Blog USSD updates.";
-            $this->sms->sendSMS($message, $phoneNumber);
-
-            return "END You are unsubscribed.";
+            $this->sms->sendSMS("You have been unsubscribed.", $this->phoneNumber);
+            echo "END You have been unsubscribed.";
         } else {
-            return "END Unsubscribe cancelled.";
+            echo "END Invalid input.";
         }
     }
 
-    // Handle Rating
-    private function handleRating($level, $input, $phoneNumber) {
-        global $conn;
-
-        if ($level == 1) {
-            return "CON Rate blog (1-5):";
-        } elseif ($level == 2) {
+    public function menuRateBlog($input) {
+        if (count($input) == 1) {
+            echo "CON Enter your rating (1-5):";
+        } elseif (count($input) == 2) {
             $rating = intval($input[1]);
             if ($rating >= 1 && $rating <= 5) {
-                $stmt = $conn->prepare("INSERT INTO ratings (phone_number, rating) VALUES (?, ?)");
-                $stmt->execute([$phoneNumber, $rating]);
+                $stmt = $this->conn->prepare("INSERT INTO ratings (phone_number, rating) VALUES (?, ?)");
+                $stmt->execute([$this->phoneNumber, $rating]);
 
-                // Send SMS after rating
-                $message = "Thank you for rating the Blog! Your rating: $rating.";
-                $this->sms->sendSMS($message, $phoneNumber);
-
-                return "END Thank you for rating!";
+                $this->sms->sendSMS("Thanks for your $rating-star rating!", $this->phoneNumber);
+                echo "END Thank you for your rating!";
             } else {
-                return "END Invalid rating.";
+                echo "END Invalid rating. Enter 1-5.";
             }
         }
     }
 
-    // Handle Topic Suggestion
-    private function handleTopicSuggestion($level, $input, $phoneNumber) {
-        global $conn;
+    public function menuSuggestTopic($input) {
+        if (count($input) == 1) {
+            echo "CON Enter your topic suggestion:";
+        } elseif (count($input) == 2) {
+            $stmt = $this->conn->prepare("INSERT INTO topics (phone_number, suggestion) VALUES (?, ?)");
+            $stmt->execute([$this->phoneNumber, $input[1]]);
 
-        if ($level == 1) {
-            return "CON Enter your topic suggestion:";
-        } elseif ($level == 2) {
-            $stmt = $conn->prepare("INSERT INTO topics (phone_number, suggestion) VALUES (?, ?)");
-            $stmt->execute([$phoneNumber, $input[1]]);
-
-            // Send SMS after topic suggestion
-            $message = "Thank you for your suggestion!";
-            $this->sms->sendSMS($message, $phoneNumber);
-
-            return "END Thanks for your suggestion!";
+            $this->sms->sendSMS("Thanks for your topic suggestion!", $this->phoneNumber);
+            echo "END Suggestion received.";
         }
     }
 
-    // Handle Feedback
-    private function handleFeedback($level, $input, $phoneNumber) {
-        global $conn;
+    public function menuFeedback($input) {
+        if (count($input) == 1) {
+            echo "CON Enter your feedback:";
+        } elseif (count($input) == 2) {
+            $stmt = $this->conn->prepare("INSERT INTO feedback (phone_number, feedback) VALUES (?, ?)");
+            $stmt->execute([$this->phoneNumber, $input[1]]);
 
-        if ($level == 1) {
-            return "CON Feedback Type:\n1. Comment\n2. Issue";
-        } elseif ($level == 2) {
-            return "CON Enter your message:";
-        } elseif ($level == 3) {
-            $type = $input[1] == "1" ? "comment" : "issue";
-            $message = $input[2];
-            $stmt = $conn->prepare("INSERT INTO feedback (phone_number, feedback_type, message) VALUES (?, ?, ?)");
-            $stmt->execute([$phoneNumber, $type, $message]);
-
-            // Send SMS after feedback submission
-            $message = "Thank you for your feedback!";
-            $this->sms->sendSMS($message, $phoneNumber);
-
-            return "END Thank you for your feedback!";
+            $this->sms->sendSMS("Thanks for your feedback!", $this->phoneNumber);
+            echo "END Feedback received.";
         }
     }
 }
